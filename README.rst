@@ -1,40 +1,127 @@
-=================
-Simple golang app
-=================
+# Lab 03 – Go Application
 
-This is a starter project for the third laboratory assignment on containerization.
+## Огляд
 
-How to run
-==========
+Go HTTP-сервер який повертає розмітку з трьома варіантами образів:
 
-You will need `golang <https://go.dev/doc/install>`_ toolchain installed in
-order to compile this project.
+- `Dockerfile.single` – single-stage (~7s, ~320 MB)
+- `Dockerfile.scratch` – multi-stage → scratch (~5.9s, ~9.99 MB)  
+- `Dockerfile.distroless` – multi-stage → distroless (~5.6s, ~12 MB)
 
-Build the project with the following command:
+## Структура проекту
 
-.. code-block:: console
+```
+lab-03-golang/
+├── cmd/
+│   ├── main.go
+│   └── go.mod
+├── Dockerfile.single
+├── Dockerfile.scratch
+├── Dockerfile.distroless
+└── README.md
+```
 
-   solo@falcon ~/project $ go build -o build/fizzbuzz
+## Локальний запуск
 
-When you have the project built, you can run it by invoking the binary:
+```bash
+cd cmd
+go mod download
+go build -o fizzbuzz main.go
+./fizzbuzz serve
+curl http://localhost:8080/
+```
 
-.. code-block:: console
+## Docker образи
 
-   solo@falcon ~/project $ ./build/fizzbuzz
-   Usage:
-     fizzbuzz [command]
+### 1. Dockerfile.single (single-stage)
 
-   Available Commands:
-     completion  Generate the autocompletion script for the specified shell
-     help        Help about any command
-     query       Query if the number is fizz/buzz or fizzbuzz
-     serve       Run an http server to anser fizzbuzz queries
+Простий односторонній образ на базі golang:1.21-alpine
 
-   Flags:
-     -h, --help   help for fizzbuzz
+```bash
+docker pull golang:1.21-alpine
+docker rmi space/lab03-golang:single >/dev/null 2>&1 || true
+time docker build -t space/lab03-golang:single -f Dockerfile.single .
+# ~7s, ~320 MB
+```
 
-   solo@falcon ~/project $ ./build/fizzbuzz serve
-   Listening on http://0.0.0.0:8080
+**Запуск:**
 
-When serving a project, press Ctrl+C to sent SIGTERM signal to the running
-server and bring it down.
+```bash
+docker run -d --name go-single -p 8080:8080 space/lab03-golang:single
+curl http://localhost:8080/
+docker stop go-single && docker rm go-single
+```
+
+### 2. Dockerfile.scratch (multi-stage → scratch)
+
+Багатоступеневий збір з фінальним образом на базі scratch
+
+```bash
+docker rmi space/lab03-golang:scratch >/dev/null 2>&1 || true
+time docker build -t space/lab03-golang:scratch -f Dockerfile.scratch .
+# ~5.9s, ~9.99 MB
+```
+
+**Запуск:**
+
+```bash
+docker run -d --name go-scratch -p 8080:8080 space/lab03-golang:scratch
+curl http://localhost:8080/
+docker stop go-scratch && docker rm go-scratch
+```
+
+### 3. Dockerfile.distroless (multi-stage → distroless)
+
+Багатоступеневий збір з фінальним образом на базі distroless
+
+```bash
+docker rmi space/lab03-golang:distroless >/dev/null 2>&1 || true
+time docker build -t space/lab03-golang:distroless -f Dockerfile.distroless .
+# ~5.6s, ~12 MB
+```
+
+**Запуск:**
+
+```bash
+docker run -d --name go-distroless -p 8080:8080 space/lab03-golang:distroless
+curl http://localhost:8080/
+docker stop go-distroless && docker rm go-distroless
+```
+
+## Порівняння образів
+
+| Тип образу | Час збірки | Розмір образу | Переваги | Недоліки |
+|------------|------------|---------------|----------|----------|
+| Single-stage | ~7s | ~320 MB | Простота, інструменти для дебагу | Великий розмір |
+| Scratch | ~5.9s | ~9.99 MB | Мінімальний розмір | Немає інструментів, складний дебаг |
+| Distroless | ~5.6s | ~12 MB | Баланс між розміром і функціональністю | Обмежені можливості дебагу |
+
+## Тестування
+
+Після запуску будь-якого з образів, сервер буде доступний на `http://localhost:8080/`
+
+```bash
+curl http://localhost:8080/
+```
+
+## Вимоги
+
+- Docker
+- Go 1.21+ (для локального запуску)
+
+## Корисні команди
+
+**Перегляд розміру образів:**
+```bash
+docker images | grep space/lab03-golang
+```
+
+**Очищення всіх образів:**
+```bash
+docker rmi space/lab03-golang:single space/lab03-golang:scratch space/lab03-golang:distroless
+```
+
+**Перегляд запущених контейнерів:**
+```bash
+docker ps
+```
